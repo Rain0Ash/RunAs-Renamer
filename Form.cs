@@ -54,7 +54,7 @@ namespace RunAsRenamer
         private void CheckFileExists(Object sender, EventArgs e)
         {
             TextBox textBox = (TextBox) sender;
-            textBox.BackColor = !File.Exists(textBox.Text) || Path.GetExtension(textBox.Text) != ".ico" ? Color.IndianRed : Color.White;
+            textBox.BackColor = textBox.Text != String.Empty && (!File.Exists(textBox.Text) || Path.GetExtension(textBox.Text) != ".ico") ? Color.IndianRed : Color.White;
         }
         
         private const String IcoDirectory = @"C:\Windows\CustomICO";
@@ -72,23 +72,22 @@ namespace RunAsRenamer
                     PsExecInstaller.Uninstall();
                 }
 
-                if (runAsAdministratorNameTextBox.Text.Length < 1 || runAsAdministratorIconTextBox.Text.Length < 1 ||
-                    runAsSystemCheckBox.Checked &&
-                    (runAsSystemNameTextBox.Text.Length < 1 || runAsSystemIconTextBox.Text.Length < 1))
+                if (runAsAdministratorNameTextBox.Text.Length < 1 ||
+                    runAsSystemCheckBox.Checked && runAsSystemNameTextBox.Text.Length < 1)
                 {
                     MessageBox.Show(@"Some of text lines is empty!");
                     return;
                 }
 
-                if (!File.Exists(runAsAdministratorIconTextBox.Text) ||
-                    runAsSystemCheckBox.Checked && !File.Exists(runAsSystemIconTextBox.Text))
+                if (!File.Exists(runAsAdministratorIconTextBox.Text) && runAsAdministratorIconTextBox.Text != String.Empty ||
+                    runAsSystemCheckBox.Checked && !File.Exists(runAsSystemIconTextBox.Text) && runAsSystemIconTextBox.Text != String.Empty)
                 {
                     MessageBox.Show(@"Invalid icon path!");
                     return;
                 }
 
-                if (Path.GetExtension(runAsAdministratorIconTextBox.Text) != @".ico" ||
-                    runAsSystemCheckBox.Checked && Path.GetExtension(runAsSystemIconTextBox.Text) != @".ico")
+                if (Path.GetExtension(runAsAdministratorIconTextBox.Text) != @".ico" && runAsAdministratorIconTextBox.Text != String.Empty ||
+                    runAsSystemCheckBox.Checked && Path.GetExtension(runAsSystemIconTextBox.Text) != @".ico" && runAsSystemIconTextBox.Text != String.Empty)
                 {
                     MessageBox.Show(@"Path not contain icon!");
                     return;
@@ -97,9 +96,13 @@ namespace RunAsRenamer
                 try
                 {
                     Directory.CreateDirectory(IcoDirectory);
-                    File.Copy(runAsAdministratorIconTextBox.Text,
-                        Path.Combine(IcoDirectory, @"Administrator\Administrator.ico"), true);
-                    if (runAsSystemCheckBox.Checked)
+                    if (runAsAdministratorIconTextBox.Text != String.Empty)
+                    {
+                        File.Copy(runAsAdministratorIconTextBox.Text,
+                            Path.Combine(IcoDirectory, @"Administrator\Administrator.ico"), true);
+                    }
+
+                    if (runAsSystemCheckBox.Checked && runAsSystemIconTextBox.Text != String.Empty)
                     {
                         File.Copy(runAsSystemIconTextBox.Text, Path.Combine(IcoDirectory, @"System\System.ico"), true);
                     }
@@ -259,7 +262,14 @@ namespace RunAsRenamer
             }
             try
             {
-                administratorKey?.SetValue("icon", Path.Combine(IcoDirectory, @"Administrator\Administrator.ico"));
+                if (runAsAdministratorIconTextBox.Text != String.Empty)
+                {
+                    administratorKey?.SetValue("icon", Path.Combine(IcoDirectory, @"Administrator\Administrator.ico"));
+                }
+                else
+                {
+                    administratorKey?.DeleteValue("icon");
+                }
             }
             catch
             {
@@ -304,7 +314,14 @@ namespace RunAsRenamer
             }
             try
             {
-                systemKey?.SetValue("icon", Path.Combine(IcoDirectory, @"System\System.ico"));
+                if (runAsSystemIconTextBox.Text != String.Empty)
+                {
+                    systemKey?.SetValue("icon", Path.Combine(IcoDirectory, @"System\System.ico"));
+                }
+                else
+                {
+                    systemKey?.DeleteValue("icon");
+                }
             }
             catch
             {
