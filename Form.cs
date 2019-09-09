@@ -60,56 +60,73 @@ namespace RunAsRenamer
         private const String IcoDirectory = @"C:\Windows\CustomICO";
         private void OnApplyButton_Click(Object sender, EventArgs e)
         {
-            if (runAsSystemCheckBox.Checked)
+            StopExplorer();
+            try
             {
-                PsExecInstaller.Install();
-            }
-            else
-            {
-                PsExecInstaller.Uninstall();
-            }
+                if (runAsSystemCheckBox.Checked)
+                {
+                    PsExecInstaller.Install();
+                }
+                else
+                {
+                    PsExecInstaller.Uninstall();
+                }
 
-            if (runAsAdministratorNameTextBox.Text.Length < 1 || runAsAdministratorIconTextBox.Text.Length < 1 ||
-                runAsSystemCheckBox.Checked &&
-                (runAsSystemNameTextBox.Text.Length < 1 || runAsSystemIconTextBox.Text.Length < 1))
-            {
-                MessageBox.Show(@"Some of text lines is empty!");
-                return;
-            }
+                if (runAsAdministratorNameTextBox.Text.Length < 1 || runAsAdministratorIconTextBox.Text.Length < 1 ||
+                    runAsSystemCheckBox.Checked &&
+                    (runAsSystemNameTextBox.Text.Length < 1 || runAsSystemIconTextBox.Text.Length < 1))
+                {
+                    MessageBox.Show(@"Some of text lines is empty!");
+                    return;
+                }
 
-            if (!File.Exists(runAsAdministratorIconTextBox.Text) ||
-                runAsSystemCheckBox.Checked && !File.Exists(runAsSystemIconTextBox.Text))
-            {
-                MessageBox.Show(@"Invalid icon` path!");
-                return;
-            }
+                if (!File.Exists(runAsAdministratorIconTextBox.Text) ||
+                    runAsSystemCheckBox.Checked && !File.Exists(runAsSystemIconTextBox.Text))
+                {
+                    MessageBox.Show(@"Invalid icon path!");
+                    return;
+                }
 
-            if (Path.GetExtension(runAsAdministratorIconTextBox.Text) != @".ico" ||
-                runAsSystemCheckBox.Checked && Path.GetExtension(runAsSystemIconTextBox.Text) != @".ico")
-            {
-                MessageBox.Show(@"Path not contain icon!");
-                return;
-            }
+                if (Path.GetExtension(runAsAdministratorIconTextBox.Text) != @".ico" ||
+                    runAsSystemCheckBox.Checked && Path.GetExtension(runAsSystemIconTextBox.Text) != @".ico")
+                {
+                    MessageBox.Show(@"Path not contain icon!");
+                    return;
+                }
 
-            
-            Directory.CreateDirectory(IcoDirectory);
-            File.Copy(runAsAdministratorIconTextBox.Text, Path.Combine(IcoDirectory, @"Administrator\Administrator.ico"));
-            if (runAsSystemCheckBox.Checked)
-            {
-                File.Copy(runAsSystemIconTextBox.Text, Path.Combine(IcoDirectory, @"System\System.ico"));
-            }
+                try
+                {
+                    Directory.CreateDirectory(IcoDirectory);
+                    File.Copy(runAsAdministratorIconTextBox.Text,
+                        Path.Combine(IcoDirectory, @"Administrator\Administrator.ico"), true);
+                    if (runAsSystemCheckBox.Checked)
+                    {
+                        File.Copy(runAsSystemIconTextBox.Text, Path.Combine(IcoDirectory, @"System\System.ico"), true);
+                    }
+                }
+                catch (IOException ex)
+                {
+                    //pass
+                }
 
-            InstallAdministratorRegistry();
-            if (runAsSystemCheckBox.Checked)
-            {
-                InstallSystemRegistry();
+                InstallAdministratorRegistry();
+                if (runAsSystemCheckBox.Checked)
+                {
+                    InstallSystemRegistry();
+                }
+                else
+                {
+                    RemoveSystemRegistry();
+                }
             }
-            else
+            catch (Exception exception)
             {
-                RemoveSystemRegistry();
+                MessageBox.Show(exception.ToString());
             }
-
-            RestartExplorer();
+            finally
+            {
+                StartExplorer();
+            }
         }
 
         private void OnResetButton_Click(Object sender, EventArgs e)
@@ -118,9 +135,12 @@ namespace RunAsRenamer
             RemoveSystemRegistry();
             RestartExplorer();
         }
-        
-        private static void RestartExplorer()
+
+        private static void StopExplorer()
         {
+            RegistryKey explorerRestartKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon", true);
+            Int32.TryParse(explorerRestartKey?.GetValue("AutoRestartShell").ToString(), out Int32 originalExplorerValue);
+            explorerRestartKey?.SetValue("AutoRestartShell", 0);
             foreach (Process p in Process.GetProcessesByName("explorer.exe"))
             {
                 // In case we get Access Denied
@@ -136,10 +156,15 @@ namespace RunAsRenamer
                 }
                 catch (Exception e)
                 {
-                    // ignored
+                    MessageBox.Show(e.ToString());
                 }
             }
-            Boolean contain = false;
+            
+            explorerRestartKey?.SetValue("AutoRestartShell", originalExplorerValue);
+        }
+
+        private static void StartExplorer()
+        {
             foreach (Process p in Process.GetProcessesByName("explorer.exe"))
             {
                 // In case we get Access Denied
@@ -150,7 +175,7 @@ namespace RunAsRenamer
                         continue;
                     }
 
-                    contain = true;
+                    Process.Start("explorer.exe");
                     break;
                 }
                 catch (Exception e)
@@ -158,15 +183,16 @@ namespace RunAsRenamer
                     // ignored
                 }
             }
-
-            if (contain)
-            {
-                Process.Start("explorer.exe");
-            }
+        }
+        
+        private static void RestartExplorer()
+        {
+            StopExplorer();
+            StartExplorer();
         }
         
         private readonly RegistryKey defaultKey =
-                Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Classes\exefile\shell");
+                Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Classes\exefile\shell", RegistryKeyPermissionCheck.ReadWriteSubTree);
 
         private String[] GetAdministratorRegistry()
         {
@@ -222,7 +248,7 @@ namespace RunAsRenamer
         
         private void InstallAdministratorRegistry()
         {
-            RegistryKey administratorKey = defaultKey?.CreateSubKey("runas");
+            RegistryKey administratorKey = defaultKey?.CreateSubKey("runas", RegistryKeyPermissionCheck.ReadWriteSubTree);
             try
             {
                 administratorKey?.SetValue("", runAsAdministratorNameTextBox.Text);
@@ -244,7 +270,7 @@ namespace RunAsRenamer
 
         private void RemoveAdministratorRegistry()
         {
-            RegistryKey administratorKey = defaultKey?.CreateSubKey("runas");
+            RegistryKey administratorKey = defaultKey?.CreateSubKey("runas", RegistryKeyPermissionCheck.ReadWriteSubTree);
             try
             {
                 administratorKey?.SetValue("", "");
@@ -266,7 +292,7 @@ namespace RunAsRenamer
 
         private void InstallSystemRegistry()
         {
-            RegistryKey systemKey = defaultKey?.CreateSubKey("runassystem");
+            RegistryKey systemKey = defaultKey?.CreateSubKey("runassystem", RegistryKeyPermissionCheck.ReadWriteSubTree);
             RegistryKey systemKeyCommand = systemKey?.CreateSubKey("command");
             try
             {

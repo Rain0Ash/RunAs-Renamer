@@ -15,9 +15,16 @@ namespace RunAsRenamer
         internal static void Install()
         {
             Boolean is64Os = IntPtr.Size == 8;
-            using (FileStream stream = File.Open(is64Os ? PsExec64Path : PsExecPath, FileMode.Create, FileAccess.Write))
+            if (File.Exists(is64Os ? PsExec64Path : PsExecPath))
             {
-                stream.Write(is64Os ? Resources.PsExec64 : Resources.PsExec, 0, is64Os ? Resources.PsExec64.Length : Resources.PsExec.Length);
+                return;
+            }
+
+            using (FileStream stream = File.Open(is64Os ? PsExec64Path : PsExecPath, FileMode.Create,
+                FileAccess.Write))
+            {
+                stream.Write(is64Os ? Resources.PsExec64 : Resources.PsExec, 0,
+                    is64Os ? Resources.PsExec64.Length : Resources.PsExec.Length);
             }
         }
 
